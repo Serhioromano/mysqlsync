@@ -1,0 +1,28 @@
+{
+    "files_path" : "./snash",
+    "profiles": {
+        "dev":{
+            "dbname": "icod_project",
+            "user": "root",
+            "pass": "root",
+            "host": "localhost",
+            "port": "3306",
+            "prefix": "",
+            "delete_table": false,
+            "delete_column": true,
+            "delete_index": true
+        },
+        "prod":{
+            "dbname": "p_8",
+            "user": "root",
+            "pass": "root",
+            "host": "localhost",
+            "port": "3306",
+            "prefix": "p_8_",
+            "file_name": "icod_project.json",
+            "delete_table": true,
+            "delete_column": true,
+            "delete_index": true
+        }
+    }
+}

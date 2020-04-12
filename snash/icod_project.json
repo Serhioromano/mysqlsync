@@ -1,0 +1,658 @@
+{
+    "name": "icod_project",
+    "prefix": "",
+    "tables": {
+        "audit_log": {
+            "AutoIncrement": "1",
+            "AvgRowLength": 0,
+            "CheckTime": null,
+            "Checksum": null,
+            "Collation": "utf8_general_ci",
+            "Comment": "",
+            "CreateOptions": "",
+            "CreateTime": "2020-04-12 12:31:24",
+            "DataFree": 0,
+            "DataLength": 16384,
+            "Engine": "InnoDB",
+            "IndexLength": 0,
+            "MaxDataLength": 0,
+            "Name": "audit_log",
+            "Primary": "id",
+            "RowFormat": "Compact",
+            "Rows": 0,
+            "UpdateTime": null,
+            "Version": 10,
+            "constraines": {},
+            "fields": {
+                "1": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "PRI",
+                    "COLUMN_NAME": "id",
+                    "COLUMN_TYPE": "int(10) unsigned",
+                    "DATA_TYPE": "int",
+                    "EXTRA": "auto_increment",
+                    "IS_NULLABLE": "NO",
+                    "ORDINAL_POSITION": "1"
+                },
+                "2": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "user_id",
+                    "COLUMN_TYPE": "int(10) unsigned",
+                    "DATA_TYPE": "int",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "2"
+                },
+                "3": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "module",
+                    "COLUMN_TYPE": "varchar(45)",
+                    "DATA_TYPE": "varchar",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "3"
+                },
+                "4": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "action_group",
+                    "COLUMN_TYPE": "varchar(45)",
+                    "DATA_TYPE": "varchar",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "4"
+                },
+                "5": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "action",
+                    "COLUMN_TYPE": "varchar(45)",
+                    "DATA_TYPE": "varchar",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "5"
+                },
+                "6": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "params",
+                    "COLUMN_TYPE": "text",
+                    "DATA_TYPE": "text",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "6"
+                },
+                "7": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "created_at",
+                    "COLUMN_TYPE": "datetime",
+                    "DATA_TYPE": "datetime",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "7"
+                },
+                "8": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "message",
+                    "COLUMN_TYPE": "varchar(250)",
+                    "DATA_TYPE": "varchar",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "8"
+                }
+            },
+            "indexes": {
+                "PRIMARY": {
+                    "Cardinality": "0",
+                    "Collation": "A",
+                    "Column_name": "id",
+                    "Comment": "",
+                    "Index_comment": "",
+                    "Index_type": "BTREE",
+                    "Key_name": "PRIMARY",
+                    "Non_unique": "0",
+                    "Null": "",
+                    "Packed": null,
+                    "Seq_in_index": "1",
+                    "Sub_part": null,
+                    "Table": "audit_log",
+                    "fields": [
+                        "id"
+                    ]
+                }
+            }
+        },
+        "channel": {
+            "AutoIncrement": "1",
+            "AvgRowLength": 0,
+            "CheckTime": null,
+            "Checksum": null,
+            "Collation": "utf8_general_ci",
+            "Comment": "Table that store all device channels to request firstly for modbus",
+            "CreateOptions": "",
+            "CreateTime": "2020-04-12 12:41:27",
+            "DataFree": 0,
+            "DataLength": 16384,
+            "Engine": "InnoDB",
+            "IndexLength": 16384,
+            "MaxDataLength": 0,
+            "Name": "channel",
+            "Primary": "id",
+            "RowFormat": "Compact",
+            "Rows": 0,
+            "UpdateTime": null,
+            "Version": 10,
+            "constraines": {
+                "fk_channel_device": {
+                    "COLUMN_NAME": "device_id",
+                    "CONSTRAINT_NAME": "fk_channel_device",
+                    "DELETE_RULE": "CASCADE",
+                    "REFERENCED_COLUMN_NAME": "id",
+                    "REFERENCED_TABLE_NAME": "device",
+                    "UPDATE_RULE": "NO ACTION"
+                }
+            },
+            "fields": {
+                "1": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "PRI",
+                    "COLUMN_NAME": "id",
+                    "COLUMN_TYPE": "int(10) unsigned",
+                    "DATA_TYPE": "int",
+                    "EXTRA": "auto_increment",
+                    "IS_NULLABLE": "NO",
+                    "ORDINAL_POSITION": "1"
+                },
+                "2": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "user_id",
+                    "COLUMN_TYPE": "int(10) unsigned",
+                    "DATA_TYPE": "int",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "2"
+                },
+                "3": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "MUL",
+                    "COLUMN_NAME": "device_id",
+                    "COLUMN_TYPE": "int(10) unsigned",
+                    "DATA_TYPE": "int",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "3"
+                },
+                "4": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "symbol",
+                    "COLUMN_TYPE": "varchar(45)",
+                    "DATA_TYPE": "varchar",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "4"
+                },
+                "5": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": "0",
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "state",
+                    "COLUMN_TYPE": "tinyint(3) unsigned",
+                    "DATA_TYPE": "tinyint",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "5"
+                },
+                "6": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "params",
+                    "COLUMN_TYPE": "text",
+                    "DATA_TYPE": "text",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "6"
+                },
+                "7": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "created_at",
+                    "COLUMN_TYPE": "datetime",
+                    "DATA_TYPE": "datetime",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "7"
+                },
+                "8": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "updated_at",
+                    "COLUMN_TYPE": "datetime",
+                    "DATA_TYPE": "datetime",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "8"
+                }
+            },
+            "indexes": {
+                "PRIMARY": {
+                    "Cardinality": "0",
+                    "Collation": "A",
+                    "Column_name": "id",
+                    "Comment": "",
+                    "Index_comment": "",
+                    "Index_type": "BTREE",
+                    "Key_name": "PRIMARY",
+                    "Non_unique": "0",
+                    "Null": "",
+                    "Packed": null,
+                    "Seq_in_index": "1",
+                    "Sub_part": null,
+                    "Table": "channel",
+                    "fields": [
+                        "id"
+                    ]
+                },
+                "fk_channel_device_idx": {
+                    "Cardinality": "0",
+                    "Collation": "A",
+                    "Column_name": "device_id",
+                    "Comment": "",
+                    "Index_comment": "",
+                    "Index_type": "BTREE",
+                    "Key_name": "fk_channel_device_idx",
+                    "Non_unique": "1",
+                    "Null": "YES",
+                    "Packed": null,
+                    "Seq_in_index": "1",
+                    "Sub_part": null,
+                    "Table": "channel",
+                    "fields": [
+                        "device_id"
+                    ]
+                }
+            }
+        },
+        "device": {
+            "AutoIncrement": "1",
+            "AvgRowLength": 0,
+            "CheckTime": null,
+            "Checksum": null,
+            "Collation": "utf8_general_ci",
+            "Comment": "",
+            "CreateOptions": "",
+            "CreateTime": "2020-04-12 12:31:24",
+            "DataFree": 0,
+            "DataLength": 16384,
+            "Engine": "InnoDB",
+            "IndexLength": 0,
+            "MaxDataLength": 0,
+            "Name": "device",
+            "Primary": "id",
+            "RowFormat": "Compact",
+            "Rows": 0,
+            "UpdateTime": null,
+            "Version": 10,
+            "constraines": {},
+            "fields": {
+                "1": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "PRI",
+                    "COLUMN_NAME": "id",
+                    "COLUMN_TYPE": "int(10) unsigned",
+                    "DATA_TYPE": "int",
+                    "EXTRA": "auto_increment",
+                    "IS_NULLABLE": "NO",
+                    "ORDINAL_POSITION": "1"
+                },
+                "2": {
+                    "COLUMN_COMMENT": "Who created a device",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "user_id",
+                    "COLUMN_TYPE": "int(11)",
+                    "DATA_TYPE": "int",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "2"
+                },
+                "3": {
+                    "COLUMN_COMMENT": "Free hand device name or sort of showr descrition",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "name",
+                    "COLUMN_TYPE": "varchar(45)",
+                    "DATA_TYPE": "varchar",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "NO",
+                    "ORDINAL_POSITION": "3"
+                },
+                "4": {
+                    "COLUMN_COMMENT": "device simbol name only a-z0-9_",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "symbol",
+                    "COLUMN_TYPE": "varchar(45)",
+                    "DATA_TYPE": "varchar",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "NO",
+                    "ORDINAL_POSITION": "4"
+                },
+                "5": {
+                    "COLUMN_COMMENT": "Device state is it runs or paused or fail or whatever",
+                    "COLUMN_DEFAULT": "1",
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "state",
+                    "COLUMN_TYPE": "tinyint(3)",
+                    "DATA_TYPE": "tinyint",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "NO",
+                    "ORDINAL_POSITION": "5"
+                },
+                "6": {
+                    "COLUMN_COMMENT": "Type of device, modbus, MQTT, OPC, ...",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "type",
+                    "COLUMN_TYPE": "varchar(45)",
+                    "DATA_TYPE": "varchar",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "6"
+                },
+                "7": {
+                    "COLUMN_COMMENT": "JSON encoded addiaional parameters",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "params",
+                    "COLUMN_TYPE": "text",
+                    "DATA_TYPE": "text",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "7"
+                },
+                "8": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "created_at",
+                    "COLUMN_TYPE": "datetime",
+                    "DATA_TYPE": "datetime",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "8"
+                },
+                "9": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "updated_at",
+                    "COLUMN_TYPE": "datetime",
+                    "DATA_TYPE": "datetime",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "9"
+                }
+            },
+            "indexes": {
+                "PRIMARY": {
+                    "Cardinality": "0",
+                    "Collation": "A",
+                    "Column_name": "id",
+                    "Comment": "",
+                    "Index_comment": "",
+                    "Index_type": "BTREE",
+                    "Key_name": "PRIMARY",
+                    "Non_unique": "0",
+                    "Null": "",
+                    "Packed": null,
+                    "Seq_in_index": "1",
+                    "Sub_part": null,
+                    "Table": "device",
+                    "fields": [
+                        "id"
+                    ]
+                }
+            }
+        },
+        "task": {
+            "AutoIncrement": "1",
+            "AvgRowLength": 0,
+            "CheckTime": null,
+            "Checksum": null,
+            "Collation": "utf8_general_ci",
+            "Comment": "",
+            "CreateOptions": "",
+            "CreateTime": "2020-04-12 12:41:27",
+            "DataFree": 0,
+            "DataLength": 16384,
+            "Engine": "InnoDB",
+            "IndexLength": 32768,
+            "MaxDataLength": 0,
+            "Name": "task",
+            "Primary": "id",
+            "RowFormat": "Compact",
+            "Rows": 0,
+            "UpdateTime": null,
+            "Version": 10,
+            "constraines": {
+                "fk_kask_device": {
+                    "COLUMN_NAME": "device_id",
+                    "CONSTRAINT_NAME": "fk_kask_device",
+                    "DELETE_RULE": "CASCADE",
+                    "REFERENCED_COLUMN_NAME": "id",
+                    "REFERENCED_TABLE_NAME": "device",
+                    "UPDATE_RULE": "NO ACTION"
+                },
+                "fk_task_channel": {
+                    "COLUMN_NAME": "channel_id",
+                    "CONSTRAINT_NAME": "fk_task_channel",
+                    "DELETE_RULE": "CASCADE",
+                    "REFERENCED_COLUMN_NAME": "id",
+                    "REFERENCED_TABLE_NAME": "channel",
+                    "UPDATE_RULE": "NO ACTION"
+                }
+            },
+            "fields": {
+                "1": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "PRI",
+                    "COLUMN_NAME": "id",
+                    "COLUMN_TYPE": "int(10) unsigned",
+                    "DATA_TYPE": "int",
+                    "EXTRA": "auto_increment",
+                    "IS_NULLABLE": "NO",
+                    "ORDINAL_POSITION": "1"
+                },
+                "10": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "MUL",
+                    "COLUMN_NAME": "channel_id",
+                    "COLUMN_TYPE": "int(10) unsigned",
+                    "DATA_TYPE": "int",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "10"
+                },
+                "11": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "rtime",
+                    "COLUMN_TYPE": "varchar(6)",
+                    "DATA_TYPE": "varchar",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "11"
+                },
+                "2": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "user_id",
+                    "COLUMN_TYPE": "int(11)",
+                    "DATA_TYPE": "int",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "2"
+                },
+                "3": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "task",
+                    "COLUMN_TYPE": "varchar(45)",
+                    "DATA_TYPE": "varchar",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "3"
+                },
+                "4": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": "0",
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "state",
+                    "COLUMN_TYPE": "tinyint(1)",
+                    "DATA_TYPE": "tinyint",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "4"
+                },
+                "5": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "params",
+                    "COLUMN_TYPE": "text",
+                    "DATA_TYPE": "text",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "5"
+                },
+                "6": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "created_at",
+                    "COLUMN_TYPE": "datetime",
+                    "DATA_TYPE": "datetime",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "6"
+                },
+                "7": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "started_at",
+                    "COLUMN_TYPE": "datetime",
+                    "DATA_TYPE": "datetime",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "7"
+                },
+                "8": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "",
+                    "COLUMN_NAME": "finished_at",
+                    "COLUMN_TYPE": "datetime",
+                    "DATA_TYPE": "datetime",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "8"
+                },
+                "9": {
+                    "COLUMN_COMMENT": "",
+                    "COLUMN_DEFAULT": null,
+                    "COLUMN_KEY": "MUL",
+                    "COLUMN_NAME": "device_id",
+                    "COLUMN_TYPE": "int(10) unsigned",
+                    "DATA_TYPE": "int",
+                    "EXTRA": "",
+                    "IS_NULLABLE": "YES",
+                    "ORDINAL_POSITION": "9"
+                }
+            },
+            "indexes": {
+                "PRIMARY": {
+                    "Cardinality": "0",
+                    "Collation": "A",
+                    "Column_name": "id",
+                    "Comment": "",
+                    "Index_comment": "",
+                    "Index_type": "BTREE",
+                    "Key_name": "PRIMARY",
+                    "Non_unique": "0",
+                    "Null": "",
+                    "Packed": null,
+                    "Seq_in_index": "1",
+                    "Sub_part": null,
+                    "Table": "task",
+                    "fields": [
+                        "id"
+                    ]
+                },
+                "fk_kask_device_idx": {
+                    "Cardinality": "0",
+                    "Collation": "A",
+                    "Column_name": "device_id",
+                    "Comment": "",
+                    "Index_comment": "",
+                    "Index_type": "BTREE",
+                    "Key_name": "fk_kask_device_idx",
+                    "Non_unique": "1",
+                    "Null": "YES",
+                    "Packed": null,
+                    "Seq_in_index": "1",
+                    "Sub_part": null,
+                    "Table": "task",
+                    "fields": [
+                        "device_id"
+                    ]
+                },
+                "fk_task_channel_idx": {
+                    "Cardinality": "0",
+                    "Collation": "A",
+                    "Column_name": "channel_id",
+                    "Comment": "",
+                    "Index_comment": "",
+                    "Index_type": "BTREE",
+                    "Key_name": "fk_task_channel_idx",
+                    "Non_unique": "1",
+                    "Null": "YES",
+                    "Packed": null,
+                    "Seq_in_index": "1",
+                    "Sub_part": null,
+                    "Table": "task",
+                    "fields": [
+                        "channel_id"
+                    ]
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "mysqlsync",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "init": "GOOS=windows GOARCH=amd64 go install",
+    "restore": "go install && mysqlsync restore -p=prod",
+    "snash": "go install && mysqlsync snash -p=dev",
+    "build": "env GOOS=windows GOARCH=amd64 go build -o ./build/mysqsync_1.0.0_windows_amd64.exe ."
+  },
+  "author": "",
+  "license": "ISC"
+}
