@@ -7,7 +7,7 @@ import (
 	"reflect"
 	// "github.com/go-sql-driver/mysql"
 )
-
+	
 // DBConn DBConnecition
 type DBConn struct {
 	Conn   *sql.DB
