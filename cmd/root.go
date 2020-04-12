@@ -36,10 +36,10 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $PWD/.mysqlsync.json)")
 	rootCmd.PersistentFlags().StringP("profile", "p", "", "Name of connection profile in configuration file. By adding profile you do not need to add any other flag.")
 	rootCmd.PersistentFlags().String("db", "", "DB scheme name")
-	rootCmd.PersistentFlags().String("user", "root", "DB user name")
+	rootCmd.PersistentFlags().String("user", "", "DB user name")
 	rootCmd.PersistentFlags().String("pass", "", "DB password")
-	rootCmd.PersistentFlags().String("host", "localhost", "DB host")
-	rootCmd.PersistentFlags().String("port", "3306", "DB port")
+	rootCmd.PersistentFlags().String("host", "", "DB host")
+	rootCmd.PersistentFlags().String("port", "", "DB port")
 	rootCmd.PersistentFlags().String("prefix", "", "DB table prefix. Will be deleted on snapshot and added on restore, thus you can have dev tables with one prefix or without and prod tables with other prefix.")
 	rootCmd.PersistentFlags().StringP("file", "f", "", "File to save snapshot or to restore from (default to DB scheme name)")
 }
