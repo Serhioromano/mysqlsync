@@ -15,6 +15,7 @@ go get github.com/serhioromano/mysqlsync
 ```
 
 todo:
+
 - Install with NPM
 - Install with yum
 - Install with apt
