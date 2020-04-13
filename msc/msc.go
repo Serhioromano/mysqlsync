@@ -7,7 +7,7 @@ import (
 	"reflect"
 	// "github.com/go-sql-driver/mysql"
 )
-	
+
 // DBConn DBConnecition
 type DBConn struct {
 	Conn   *sql.DB
@@ -53,7 +53,7 @@ type Table struct {
 	IndexLength   int     `json:"Index_length"`
 	DataFree      int     `json:"Data_free"`
 	AutoIncrement *string `json:"Auto_increment"`
-	CreateTime    string  `json:"Create_time"`
+	CreateTime    *string `json:"Create_time"`
 	UpdateTime    *string `json:"Update_time"`
 	CheckTime     *string `json:"Check_time"`
 	Collation     string  `json:"Collation"`
