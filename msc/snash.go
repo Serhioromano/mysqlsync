@@ -8,7 +8,7 @@ import (
 )
 
 // Snash make DB model snapshot and saves to file
-func Snash(p MSCConfig) error {
+func Snash(p Config) error {
 	path := p.FilesPath
 	file := p.File
 

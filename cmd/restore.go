@@ -44,34 +44,39 @@ var restoreCmd = &cobra.Command{
 		if k, _ := cmd.Flags().GetBool("d-constraint"); k == true {
 			viper.Set("delete_constraint", k)
 		}
+		if o, _ := cmd.Flags().GetBool("optimize"); o == true {
+			viper.Set("optimize", o)
+		}
 
-		options := msc.MSCConfig{
+		options := msc.Config{
 			User:        viper.GetString("user"),
 			Pass:        viper.GetString("pass"),
 			Host:        viper.GetString("host"),
 			Port:        viper.GetString("port"),
 			DB:          viper.GetString("db"),
-			FilesPath:   viper.GetString("files_path"),
+			FilesPath:   viper.GetString("path"),
 			File:        viper.GetString("file"),
 			Prefix:      viper.GetString("prefix"),
 			DTable:      viper.GetBool("delete_table"),
 			DColumn:     viper.GetBool("delete_column"),
 			DIndex:      viper.GetBool("delete_index"),
 			DConstraint: viper.GetBool("delete_constraint"),
+			Optimize:    viper.GetBool("optimize"),
 		}
-		fmt.Println(options)
+		// fmt.Println(options)
 		runner := msc.Restore{}
 		err := runner.Run(options)
 		if err != nil {
 			panic(err.Error())
 		}
-		fmt.Println("Snapshot restored: " + viper.GetString("files_path") + "/" + viper.GetString("file"))
+		fmt.Println("Snapshot restored: " + viper.GetString("path") + "/" + viper.GetString("file"))
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(restoreCmd)
 
+	restoreCmd.Flags().BoolP("optimize", "o", true, "Run optimize query on table after finish")
 	restoreCmd.Flags().BoolP("d-table", "t", true, "Delete tables that are not in the import")
 	restoreCmd.Flags().BoolP("d-index", "i", true, "Delete indexes that are not in the import")
 	restoreCmd.Flags().BoolP("d-column", "c", true, "Delete table columns that are not in the import")

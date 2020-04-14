@@ -38,6 +38,7 @@ func init() {
 	rootCmd.PersistentFlags().String("db", "", "DB scheme name")
 	rootCmd.PersistentFlags().String("user", "", "DB user name")
 	rootCmd.PersistentFlags().String("pass", "", "DB password")
+	rootCmd.PersistentFlags().String("path", "", "Path where snapshot files are stored")
 	rootCmd.PersistentFlags().String("host", "", "DB host")
 	rootCmd.PersistentFlags().String("port", "", "DB port")
 	rootCmd.PersistentFlags().String("prefix", "", "DB table prefix. Will be deleted on snapshot and added on restore, thus you can have dev tables with one prefix or without and prod tables with other prefix.")
@@ -64,6 +65,7 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		cnfLoaded = true
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
+		viper.Set("path", viper.Get("files_path"))
 		profile := viper.GetString("profile")
 		if profile != "" {
 			viper.Set("user", viper.Get("profiles."+profile+".user"))
@@ -91,6 +93,10 @@ func initConfig() {
 	pass, _ := rootCmd.Flags().GetString("pass")
 	if pass != "" {
 		viper.Set("pass", pass)
+	}
+	path, _ := rootCmd.Flags().GetString("path")
+	if path != "" {
+		viper.Set("path", path)
 	}
 	port, _ := rootCmd.Flags().GetString("port")
 	if port != "" {

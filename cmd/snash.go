@@ -17,13 +17,13 @@ var snashCmd = &cobra.Command{
 	Long: `Creates DB model snapshot and stores it as JSON file. 
 You can use this file to conform to this model another DB with restore command`,
 	Run: func(cmd *cobra.Command, args []string) {
-		options := msc.MSCConfig{
+		options := msc.Config{
 			User:      viper.GetString("user"),
 			Pass:      viper.GetString("pass"),
 			Host:      viper.GetString("host"),
 			Port:      viper.GetString("port"),
 			DB:        viper.GetString("db"),
-			FilesPath: viper.GetString("files_path"),
+			FilesPath: viper.GetString("path"),
 			File:      viper.GetString("file"),
 			Prefix:    viper.GetString("prefix"),
 		}
@@ -31,7 +31,7 @@ You can use this file to conform to this model another DB with restore command`,
 		if err != nil {
 			panic(err.Error())
 		}
-		fmt.Println("Snapshot created successfuly: " + viper.GetString("files_path") + "/" + viper.GetString("file"))
+		fmt.Println("Snapshot created successfuly: " + viper.GetString("path") + "/" + viper.GetString("file"))
 	},
 }
 

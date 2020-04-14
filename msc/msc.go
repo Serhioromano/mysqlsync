@@ -25,7 +25,8 @@ func (d *DBConn) SQLConnect(dsn string) error {
 	return nil
 }
 
-type MSCConfig struct {
+// Config Main configuration object
+type Config struct {
 	User        string
 	Pass        string
 	Host        string
@@ -38,6 +39,7 @@ type MSCConfig struct {
 	DColumn     bool
 	DIndex      bool
 	DConstraint bool
+	Optimize    bool
 }
 
 // Table table structure

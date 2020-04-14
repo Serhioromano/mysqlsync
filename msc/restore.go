@@ -17,7 +17,7 @@ type Restore struct {
 }
 
 // Run DB model from file
-func (r *Restore) Run(p MSCConfig) error {
+func (r *Restore) Run(p Config) error {
 	path := p.FilesPath
 	file := p.File
 
@@ -51,8 +51,8 @@ func (r *Restore) Run(p MSCConfig) error {
 	r.prefix = p.Prefix
 	db.Scheme = p.DB
 
-	r.runSQL("USE " + db.Scheme)
-	r.runSQL("SET @@session.sql_mode =\"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION\"")
+	r.runSQL(true, "USE " + db.Scheme)
+	r.runSQL(false, "SET @@session.sql_mode =\"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION\"")
 
 	currentTables, err := db.GetTables()
 	if err != nil {
@@ -67,7 +67,7 @@ func (r *Restore) Run(p MSCConfig) error {
 			if currentTable.Collation != getString(importTable, "Collation") ||
 				currentTable.Engine != getString(importTable, "Engine") ||
 				currentTable.Comment != getString(importTable, "Comment") {
-				r.runSQL(fmt.Sprintf(
+				r.runSQL(true, fmt.Sprintf(
 					`ALTER TABLE %s COLLATE = %s , ENGINE = %s, COMMENT = '%s'`,
 					newTableName, getString(importTable, "Collation"),
 					getString(importTable, "Engine"),
@@ -103,13 +103,13 @@ func (r *Restore) Run(p MSCConfig) error {
 						currField.COLUMN_TYPE != getString(importField, "COLUMN_TYPE") ||
 						(currField.COLUMN_DEFAULT != nil && *currField.COLUMN_DEFAULT != getString(importField, "COLUMN_DEFAULT")) ||
 						currField.COLUMN_COMMENT != getString(importField, "COLUMN_COMMENT") {
-						r.runSQL(fmt.Sprintf(
+						r.runSQL(true, fmt.Sprintf(
 							`ALTER TABLE `+"`%s`"+` CHANGE COLUMN `+"`%s`"+` %s`,
 							newTableName, getString(importField, "COLUMN_NAME"), ufs))
 					}
 				} else {
 					// Create field
-					r.runSQL(fmt.Sprintf(`ALTER TABLE `+"`%s`"+` ADD COLUMN %s`,
+					r.runSQL(true, fmt.Sprintf(`ALTER TABLE `+"`%s`"+` ADD COLUMN %s`,
 						newTableName, ufs))
 				}
 
@@ -118,7 +118,7 @@ func (r *Restore) Run(p MSCConfig) error {
 			if p.DColumn {
 				for _, currentField := range currentFields {
 					if !currentFieldInImport(importFields, currentField.COLUMN_NAME) {
-						r.runSQL(fmt.Sprintf(`ALTER TABLE `+"`%s`"+` DROP COLUMN  `+"`%s`",
+						r.runSQL(true, fmt.Sprintf(`ALTER TABLE `+"`%s`"+` DROP COLUMN  `+"`%s`",
 							newTableName, currentField.COLUMN_NAME))
 					}
 				}
@@ -140,7 +140,7 @@ func (r *Restore) Run(p MSCConfig) error {
 					continue
 				}
 
-				r.runSQL(fmt.Sprintf("ALTER TABLE `%s` ADD INDEX `%s` (%s ASC)",
+				r.runSQL(true, fmt.Sprintf("ALTER TABLE `%s` ADD INDEX `%s` (%s ASC)",
 					newTableName,
 					getString(importIndex, "Key_name"),
 					joinI(importIndex.(map[string]interface{})["fields"], " ASC, ")))
@@ -153,7 +153,7 @@ func (r *Restore) Run(p MSCConfig) error {
 					// delete it
 					if !currentIndexInImport(importIndexes, currentIndex.Key_name) &&
 						!strings.Contains(currentIndex.Key_name, "fk_") {
-						r.runSQL(fmt.Sprintf("DROP INDEX `%s` ON %s",
+						r.runSQL(false, fmt.Sprintf("DROP INDEX `%s` ON %s",
 							currentIndex.Key_name, newTableName))
 					}
 				}
@@ -211,7 +211,7 @@ func (r *Restore) Run(p MSCConfig) error {
 
 			}
 
-			r.runSQL(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (\n\t%s\n) ENGINE=%s COLLATE=%s COMMENT='%s'",
+			r.runSQL(true, fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (\n\t%s\n) ENGINE=%s COLLATE=%s COMMENT='%s'",
 				newTableName,
 				strings.Join(sql, ",\n\t"),
 				getString(importTable, "Engine"),
@@ -225,20 +225,20 @@ func (r *Restore) Run(p MSCConfig) error {
 	if p.DTable {
 		for _, currentTable := range currentTables {
 			if !currentTableInImport(p.Prefix, importTables, currentTable.Name) {
-				r.runSQL(fmt.Sprintf("DROP TABLE IF EXISTS `%s`", currentTable.Name))
+				r.runSQL(true, fmt.Sprintf("DROP TABLE IF EXISTS `%s`", currentTable.Name))
 			}
 		}
 	}
 
 	// Constrains
-	r.runSQL("SET @@session.UNIQUE_CHECKS=0")
-	r.runSQL("SET @@session.FOREIGN_KEY_CHECKS=0")
-	r.runSQL("SET @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
+	r.runSQL(false, "SET @@session.UNIQUE_CHECKS=0")
+	r.runSQL(false, "SET @@session.FOREIGN_KEY_CHECKS=0")
+	r.runSQL(false, "SET @@session.sql_mode='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'")
 	currentTables, err = db.GetTables()
 	if err != nil {
 		return err
 	}
-	// r.runSQL("START TRANSACTION")
+	// r.runSQL(true, "START TRANSACTION")
 	for _, importTable := range data["tables"].(map[string]interface{}) {
 		newTableName := db.Prefix + getString(importTable, "Name")
 		currentConstrains, err := db.GetConstraines((getString(importTable, "Name")))
@@ -248,19 +248,24 @@ func (r *Restore) Run(p MSCConfig) error {
 		importConstrains := importTable.(map[string]interface{})["constraines"].(map[string]interface{})
 
 		for _, currentConstrain := range currentConstrains {
-			if p.DConstraint == false && !currentConstrainInImport(importConstrains, currentConstrain.CONSTRAINT_NAME, getString(data, "prefix"), p.Prefix) {
+			if currentConstrainInImport(importConstrains, currentConstrain.CONSTRAINT_NAME, getString(data, "prefix"), p.Prefix) {
 				continue
 			}
-			r.runSQL(fmt.Sprintf("ALTER TABLE `%s` DROP FOREIGN KEY `%s`",
+			if p.DConstraint == false {
+				continue
+			}
+			r.runSQL(false, fmt.Sprintf("ALTER TABLE `%s` DROP FOREIGN KEY `%s`",
 				newTableName, currentConstrain.CONSTRAINT_NAME))
-			// r.runSQL(fmt.Sprintf("ALTER TABLE `%s` DROP INDEX `%s`",
+			// r.runSQL(true, fmt.Sprintf("ALTER TABLE `%s` DROP INDEX `%s`",
 			// 	newTableName, currentConstrain.CONSTRAINT_NAME))
 		}
 		for _, importConstrain := range importConstrains {
-
+			if importConstrainInCurrent(currentConstrains, getString(importConstrain, "CONSTRAINT_NAME"), getString(data, "prefix"), p.Prefix) {
+				continue
+			}
 
 			importTableName := p.Prefix + strings.Replace(getString(importConstrain, "REFERENCED_TABLE_NAME"), getString(data, "prefix"), "", 1)
-			r.runSQL(fmt.Sprintf("ALTER TABLE `%s` ADD CONSTRAINT `%s` FOREIGN KEY (`%s`)"+
+			r.runSQL(true, fmt.Sprintf("ALTER TABLE `%s` ADD CONSTRAINT `%s` FOREIGN KEY (`%s`)"+
 				" REFERENCES `%s` (`%s`) ON DELETE %s ON UPDATE %s",
 				newTableName,
 				p.Prefix+getString(importConstrain, "CONSTRAINT_NAME"),
@@ -271,24 +276,24 @@ func (r *Restore) Run(p MSCConfig) error {
 				getString(importConstrain, "UPDATE_RULE")))
 		}
 
-		if getString(importTable, "Engine") == "InnoDB" || getString(importTable, "Engine") == "MyISAM" {
-			r.runSQL("OPTIMIZE TABLE " + newTableName)
+		if p.Optimize &&  getString(importTable, "Engine") == "InnoDB" || getString(importTable, "Engine") == "MyISAM" {
+			r.runSQL(false, "OPTIMIZE TABLE " + newTableName)
 		}
 
 	}
-	// r.runSQL("SET SQL_MODE=@OLD_SQL_MODE")
-	// r.runSQL("SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS")
-	// r.runSQL("SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS")
-	// r.runSQL("COMMIT")
+	// r.runSQL(true, "SET SQL_MODE=@OLD_SQL_MODE")
+	// r.runSQL(true, "SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS")
+	// r.runSQL(true, "SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS")
+	// r.runSQL(true, "COMMIT")
 
 	return nil
 }
 
-func (r *Restore) runSQL(sql string) error {
+func (r *Restore) runSQL(p bool, sql string) error {
 	color.Cyan(sql)
 	fmt.Println("")
 	_, err := r.conn.Conn.Query(sql)
-	if err != nil {
+	if p == true && err != nil {
 		panic(err.Error())
 	}
 	return err
@@ -344,25 +349,38 @@ func currentIndexInImport(i interface{}, name string) bool {
 	return ok
 }
 
-func constrainExists(i []Constrain, cc map[string]interface{}, oldp string, newp string) bool {
+// func constrainExists(i []Constrain, cc map[string]interface{}, oldp string, newp string) bool {
+// 	ok := false
+// 	importTable := strings.Replace(getString(cc, "REFERENCED_TABLE_NAME"), oldp, "", 1)
+// 	for _, c := range i {
+// 		currentTable := strings.Replace(c.REFERENCED_COLUMN_NAME, newp, "", 1)
+// 		if currentTable == importTable &&
+// 			c.REFERENCED_COLUMN_NAME == getString(cc, "REFERENCED_COLUMN_NAME") &&
+// 			c.CONSTRAINT_NAME == getString(cc, "CONSTRAINT_NAME") {
+// 			ok = true
+// 			break
+// 		}
+// 	}
+// 	return ok
+// }
+
+func currentConstrainInImport(i interface{}, name string, oldp string, newp string) bool {
 	ok := false
-	importTable := strings.Replace(getString(cc, "REFERENCED_TABLE_NAME"), oldp, "", 1)
-	for _, c := range i {
-		currentTable := strings.Replace(c.REFERENCED_COLUMN_NAME, newp, "", 1)
-		if currentTable == importTable &&
-			c.REFERENCED_COLUMN_NAME == getString(cc, "REFERENCED_COLUMN_NAME") &&
-			c.CONSTRAINT_NAME == getString(cc, "CONSTRAINT_NAME") {
+	cname := strings.Replace(name, newp, "", 1)
+	for _, f := range i.(map[string]interface{}) {
+		iname := strings.Replace(getString(f, "CONSTRAINT_NAME"), oldp, "", 1)
+		if cname == iname {
 			ok = true
 			break
 		}
 	}
 	return ok
 }
-func currentConstrainInImport(i interface{}, name string, oldp string, newp string) bool {
+func importConstrainInCurrent(c []Constrain, name string, oldp string, newp string) bool {
 	ok := false
-	cname := strings.Replace(name, oldp, "", 1)
-	for _, f := range i.(map[string]interface{}) {
-		iname := strings.Replace(getString(f, "CONSTRAINT_NAME"), newp, "", 1)
+	iname := strings.Replace(name, oldp, "", 1)
+	for _, f := range c {
+		cname := strings.Replace(f.CONSTRAINT_NAME, newp, "", 1)
 		if cname == iname {
 			ok = true
 			break
