@@ -1,13 +1,13 @@
 # MySQL Migration tool on steroids
 
-As we all know migrations is pain. It has so many points of failer and those who once was in that cycle, knows how hard it is to get out.
+As we all know migrations is pain. It has so many points of failer and those who once was in that cycle, knows how hard it is to get out of trouble when your migration fails in the middle of the way.
 
 > **Disclaimer:** 
 > 1. Works only with MySQL DB
 > 2. All foreign keys (constraints) HAVE TO have `fk_` prefix
 > 3. All primary fields autoincremented preferably named `id` (not necessary)
 
-`mysqlsync` is a completely new approach to DB migrations. Instead of creating modification steps, you make a snapshot (`snash`) of a DB structure to JSON file. And then you restore this file to another DB. It will compare restore DB against JSON and automatically generate migration queries to alter columns, indexes, create or delete tables and constraints.
+`mysqlsync` is a completely new approach to DB migrations. Instead of creating migration files, you make a snapshot (`snash`) of a DB structure to JSON file. And then you restore this file to another DB. It will compare target DB against JSON and automatically generate migration queries to alter columns, indexes, create or delete tables and constraints.
 
 ## What it supports
 
