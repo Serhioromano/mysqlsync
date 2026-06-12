@@ -5,6 +5,7 @@ package main
 import (
 	"github.com/serhioromano/mysqlsync/cmd"
 	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func main() {

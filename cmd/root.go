@@ -43,6 +43,7 @@ func init() {
 	rootCmd.PersistentFlags().String("host", "", "DB host")
 	rootCmd.PersistentFlags().String("port", "", "DB port")
 	rootCmd.PersistentFlags().String("prefix", "", "DB table prefix. Will be deleted on snapshot and added on restore, thus you can have dev tables with one prefix or without and prod tables with other prefix.")
+	rootCmd.PersistentFlags().String("engine", "mysql", "Database engine: mysql or sqlite")
 	rootCmd.PersistentFlags().StringP("file", "f", "", "File to save snapshot or to restore from (default to DB scheme name)")
 }
 
@@ -76,6 +77,7 @@ func initConfig() {
 			viper.Set("host", viper.Get("profiles."+profile+".host"))
 			viper.Set("prefix", viper.Get("profiles."+profile+".prefix"))
 			viper.Set("file", viper.Get("profiles."+profile+".file_name"))
+			viper.Set("engine", viper.Get("profiles."+profile+".engine"))
 		}
 	}
 
@@ -110,6 +112,10 @@ func initConfig() {
 	file, _ := rootCmd.Flags().GetString("file")
 	if file != "" {
 		viper.Set("file", file)
+	}
+	engine, _ := rootCmd.Flags().GetString("engine")
+	if engine != "" {
+		viper.Set("engine", engine)
 	}
 	f := viper.GetString("file")
 	if f == "" {
