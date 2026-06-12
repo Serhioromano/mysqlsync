@@ -1,7 +1,6 @@
 package msc
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -16,6 +15,16 @@ type Restore struct {
 	conn   DBConn
 }
 
+// refEntry holds a parsed foreign key reference from DBML
+type refEntry struct {
+	fromTable  string
+	fromCol    string
+	toTable    string
+	toCol      string
+	deleteRule string
+	updateRule string
+}
+
 // Run DB model from file
 func (r *Restore) Run(p Config) error {
 	path := p.FilesPath
@@ -25,8 +34,8 @@ func (r *Restore) Run(p Config) error {
 	if err != nil {
 		return err
 	}
-	data := make(map[string]interface{})
-	err = json.Unmarshal(dat, &data)
+
+	data, err := parseDBML(string(dat))
 	if err != nil {
 		return err
 	}
@@ -51,7 +60,7 @@ func (r *Restore) Run(p Config) error {
 	r.prefix = p.Prefix
 	db.Scheme = p.DB
 
-	r.runSQL(true, "USE " + db.Scheme)
+	r.runSQL(true, "USE "+db.Scheme)
 	r.runSQL(false, "SET @@session.sql_mode =\"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION\"")
 
 	currentTables, err := db.GetTables()
@@ -63,7 +72,7 @@ func (r *Restore) Run(p Config) error {
 		newTableName := db.Prefix + getString(importTable, "Name")
 
 		if currentTable, ok := importTableInCurrent(currentTables, newTableName); ok == true {
-			// UPdate table
+			// Update table
 			if currentTable.Collation != getString(importTable, "Collation") ||
 				currentTable.Engine != getString(importTable, "Engine") ||
 				currentTable.Comment != getString(importTable, "Comment") {
@@ -219,7 +228,6 @@ func (r *Restore) Run(p Config) error {
 				getString(importTable, "Comment")))
 
 		}
-		// fmt.Println(res)
 	}
 
 	if p.DTable {
@@ -238,7 +246,6 @@ func (r *Restore) Run(p Config) error {
 	if err != nil {
 		return err
 	}
-	// r.runSQL(true, "START TRANSACTION")
 	for _, importTable := range data["tables"].(map[string]interface{}) {
 		newTableName := db.Prefix + getString(importTable, "Name")
 		currentConstrains, err := db.GetConstraines((getString(importTable, "Name")))
@@ -256,8 +263,6 @@ func (r *Restore) Run(p Config) error {
 			}
 			r.runSQL(false, fmt.Sprintf("ALTER TABLE `%s` DROP FOREIGN KEY `%s`",
 				newTableName, currentConstrain.CONSTRAINT_NAME))
-			// r.runSQL(true, fmt.Sprintf("ALTER TABLE `%s` DROP INDEX `%s`",
-			// 	newTableName, currentConstrain.CONSTRAINT_NAME))
 		}
 		for _, importConstrain := range importConstrains {
 			if importConstrainInCurrent(currentConstrains, getString(importConstrain, "CONSTRAINT_NAME"), getString(data, "prefix"), p.Prefix) {
@@ -276,15 +281,11 @@ func (r *Restore) Run(p Config) error {
 				getString(importConstrain, "UPDATE_RULE")))
 		}
 
-		if p.Optimize &&  getString(importTable, "Engine") == "InnoDB" || getString(importTable, "Engine") == "MyISAM" {
-			r.runSQL(false, "OPTIMIZE TABLE " + newTableName)
+		if p.Optimize && getString(importTable, "Engine") == "InnoDB" || getString(importTable, "Engine") == "MyISAM" {
+			r.runSQL(false, "OPTIMIZE TABLE "+newTableName)
 		}
 
 	}
-	// r.runSQL(true, "SET SQL_MODE=@OLD_SQL_MODE")
-	// r.runSQL(true, "SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS")
-	// r.runSQL(true, "SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS")
-	// r.runSQL(true, "COMMIT")
 
 	return nil
 }
@@ -348,21 +349,6 @@ func currentIndexInImport(i interface{}, name string) bool {
 	}
 	return ok
 }
-
-// func constrainExists(i []Constrain, cc map[string]interface{}, oldp string, newp string) bool {
-// 	ok := false
-// 	importTable := strings.Replace(getString(cc, "REFERENCED_TABLE_NAME"), oldp, "", 1)
-// 	for _, c := range i {
-// 		currentTable := strings.Replace(c.REFERENCED_COLUMN_NAME, newp, "", 1)
-// 		if currentTable == importTable &&
-// 			c.REFERENCED_COLUMN_NAME == getString(cc, "REFERENCED_COLUMN_NAME") &&
-// 			c.CONSTRAINT_NAME == getString(cc, "CONSTRAINT_NAME") {
-// 			ok = true
-// 			break
-// 		}
-// 	}
-// 	return ok
-// }
 
 func currentConstrainInImport(i interface{}, name string, oldp string, newp string) bool {
 	ok := false
@@ -493,4 +479,572 @@ func getAsString(d interface{}) string {
 	default:
 		return ""
 	}
+}
+
+// parseDBML parses a DBML document into the same map[string]interface{}
+// structure that the old JSON format used, so the restore logic works unchanged.
+func parseDBML(input string) (map[string]interface{}, error) {
+	data := make(map[string]interface{})
+	tables := make(map[string]interface{})
+
+	lines := strings.Split(input, "\n")
+
+	var schemaName string
+	var schemaPrefix string
+
+	// Collect all Ref lines for foreign keys
+	var refs []refEntry
+
+	i := 0
+	for i < len(lines) {
+		line := strings.TrimSpace(lines[i])
+
+		// Header comments
+		if strings.HasPrefix(line, "//") {
+			comment := strings.TrimSpace(line[2:])
+			if strings.HasPrefix(comment, "Schema:") {
+				schemaName = strings.TrimSpace(comment[7:])
+			} else if strings.HasPrefix(comment, "Prefix:") {
+				schemaPrefix = strings.TrimSpace(comment[7:])
+			}
+			i++
+			continue
+		}
+
+		// Empty line
+		if line == "" {
+			i++
+			continue
+		}
+
+		// Table definition
+		if strings.HasPrefix(line, "Table ") {
+			tableData, consumed, err := parseTable(lines, i)
+			if err != nil {
+				return nil, err
+			}
+			tableName := getString(tableData, "Name")
+			tables[tableName] = tableData
+			i = consumed
+			continue
+		}
+
+		// Ref line
+		if strings.HasPrefix(line, "Ref:") {
+			ref, err := parseRef(line)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing Ref at line %d: %v", i+1, err)
+			}
+			refs = append(refs, ref)
+			i++
+			continue
+		}
+
+		i++
+	}
+
+	// Apply Refs to their respective tables as constraints
+	for _, ref := range refs {
+		fromTable, ok := tables[ref.fromTable]
+		if !ok {
+			continue
+		}
+		fromTableMap := fromTable.(map[string]interface{})
+		constraines, ok := fromTableMap["constraines"].(map[string]interface{})
+		if !ok {
+			constraines = make(map[string]interface{})
+			fromTableMap["constraines"] = constraines
+		}
+
+		// Generate a constraint name: fk_<fromTable>_<fromCol>
+		constraintName := fmt.Sprintf("fk_%s_%s", ref.fromTable, ref.fromCol)
+		constraines[constraintName] = map[string]interface{}{
+			"CONSTRAINT_NAME":        constraintName,
+			"COLUMN_NAME":            ref.fromCol,
+			"REFERENCED_TABLE_NAME":  schemaPrefix + ref.toTable,
+			"REFERENCED_COLUMN_NAME": ref.toCol,
+			"UPDATE_RULE":            strings.ToUpper(ref.updateRule),
+			"DELETE_RULE":            strings.ToUpper(ref.deleteRule),
+		}
+	}
+
+	data["name"] = schemaName
+	data["prefix"] = schemaPrefix
+	data["tables"] = tables
+
+	return data, nil
+}
+
+// parseTable parses a Table block starting at line index start.
+// Returns the table data map, the next line index to process, and any error.
+func parseTable(lines []string, start int) (map[string]interface{}, int, error) {
+	tableData := make(map[string]interface{})
+
+	// Parse: Table "name" {
+	headerLine := strings.TrimSpace(lines[start])
+	tableName := ""
+
+	// Extract table name from: Table "name" {  or  Table "name" {
+	rest := strings.TrimPrefix(headerLine, "Table ")
+	rest = strings.TrimSpace(rest)
+	// Find the opening quote
+	qStart := strings.Index(rest, "\"")
+	if qStart == -1 {
+		return nil, start, fmt.Errorf("expected quoted table name at line %d: %s", start+1, headerLine)
+	}
+	qEnd := strings.Index(rest[qStart+1:], "\"")
+	if qEnd == -1 {
+		return nil, start, fmt.Errorf("unterminated table name at line %d: %s", start+1, headerLine)
+	}
+	tableName = rest[qStart+1 : qStart+1+qEnd]
+
+	tableData["Name"] = tableName
+	tableData["Engine"] = "InnoDB"
+	tableData["Collation"] = "utf8_general_ci"
+	tableData["Comment"] = ""
+
+	fields := make(map[string]interface{})
+	indexes := make(map[string]interface{})
+	constraines := make(map[string]interface{})
+
+	fieldOrdinal := 1
+	i := start + 1
+	inIndexes := false
+	inNote := false
+	noteLines := []string{}
+
+	for i < len(lines) {
+		line := lines[i]
+		trimmed := strings.TrimSpace(line)
+
+		// Handle Note block
+		if inNote {
+			if strings.Contains(trimmed, "'''") {
+				// End of note
+				endIdx := strings.Index(trimmed, "'''")
+				if endIdx > 0 {
+					noteLines = append(noteLines, trimmed[:endIdx])
+				}
+				noteText := strings.Join(noteLines, "\n")
+				noteText = strings.TrimSpace(noteText)
+				// Parse engine/collation/comment from note
+				parseTableNote(tableData, noteText)
+				inNote = false
+				noteLines = nil
+				i++
+				continue
+			}
+			noteLines = append(noteLines, trimmed)
+			i++
+			continue
+		}
+
+		// End of table block
+		if trimmed == "}" {
+			i++
+			break
+		}
+
+		// Start of Indexes block
+		if strings.HasPrefix(trimmed, "Indexes {") || trimmed == "Indexes {" {
+			inIndexes = true
+			i++
+			continue
+		}
+
+		// End of Indexes block
+		if inIndexes && trimmed == "}" {
+			inIndexes = false
+			i++
+			continue
+		}
+
+		// Inside Indexes block
+		if inIndexes {
+			idxData, err := parseIndexEntry(trimmed)
+			if err == nil {
+				indexes[idxData["Key_name"].(string)] = idxData
+			}
+			i++
+			continue
+		}
+
+		// Note block start
+		if strings.HasPrefix(trimmed, "Note:") && strings.Contains(trimmed, "'''") {
+			inNote = true
+			// Check if note starts and ends on same line
+			afterNote := trimmed[strings.Index(trimmed, "'''")+3:]
+			if strings.Contains(afterNote, "'''") {
+				endIdx := strings.Index(afterNote, "'''")
+				noteText := strings.TrimSpace(afterNote[:endIdx])
+				parseTableNote(tableData, noteText)
+				inNote = false
+				i++
+				continue
+			}
+			// Multi-line note: capture content after opening '''
+			firstContent := afterNote
+			if firstContent != "" {
+				noteLines = append(noteLines, firstContent)
+			}
+			i++
+			continue
+		}
+
+		// Column definition: "name" type [settings]
+		if strings.HasPrefix(trimmed, "\"") {
+			fieldData, err := parseColumnDef(trimmed, fieldOrdinal)
+			if err == nil {
+				fieldName := getString(fieldData, "COLUMN_NAME")
+
+				// Check if this is a primary key
+				if fieldData["COLUMN_KEY"] == "PRI" {
+					tableData["Primary"] = fieldName
+
+					// Add primary key index
+					indexes["PRIMARY"] = map[string]interface{}{
+						"Key_name":    "PRIMARY",
+						"Non_unique":  "0",
+						"Index_type":  "BTREE",
+						"fields":      []interface{}{fieldName},
+						"Seq_in_index": "1",
+						"Column_name":  fieldName,
+						"Null":         "",
+						"Comment":      "",
+						"Index_comment": "",
+					}
+				}
+
+				// Check if column has unique setting
+				if settings, ok := fieldData["_settings"].([]string); ok {
+					for _, s := range settings {
+						if s == "unique" {
+							uniqueName := fieldName
+							indexes[uniqueName] = map[string]interface{}{
+								"Key_name":    uniqueName,
+								"Non_unique":  "0",
+								"Index_type":  "BTREE",
+								"fields":      []interface{}{fieldName},
+								"Seq_in_index": "1",
+								"Column_name":  fieldName,
+								"Null":         "",
+								"Comment":      "",
+								"Index_comment": "",
+							}
+						}
+					}
+					delete(fieldData, "_settings")
+				}
+
+				fields[fmt.Sprintf("%d", fieldOrdinal)] = fieldData
+				fieldOrdinal++
+			}
+			i++
+			continue
+		}
+
+		i++
+	}
+
+	tableData["fields"] = fields
+	tableData["indexes"] = indexes
+	tableData["constraines"] = constraines
+
+	return tableData, i, nil
+}
+
+// parseColumnDef parses a DBML column definition like:
+//
+//	"name" type [pk, increment, not null, default: `value`, note: 'comment']
+func parseColumnDef(line string, ordinal int) (map[string]interface{}, error) {
+	field := make(map[string]interface{})
+
+	trimmed := strings.TrimSpace(line)
+
+	// Extract field name: first quoted string
+	qStart := strings.Index(trimmed, "\"")
+	if qStart == -1 {
+		return nil, fmt.Errorf("expected quoted field name in: %s", trimmed)
+	}
+	qEnd := strings.Index(trimmed[qStart+1:], "\"")
+	if qEnd == -1 {
+		return nil, fmt.Errorf("unterminated field name in: %s", trimmed)
+	}
+	fieldName := trimmed[qStart+1 : qStart+1+qEnd]
+
+	// Everything after the closing quote up to [ or end
+	rest := trimmed[qStart+1+qEnd+1:]
+	rest = strings.TrimSpace(rest)
+
+	// Extract column type and settings
+	colType := ""
+	var settings []string
+
+	bracketIdx := strings.Index(rest, "[")
+	if bracketIdx >= 0 && strings.HasSuffix(strings.TrimSpace(rest), "]") {
+		colType = strings.TrimSpace(rest[:bracketIdx])
+		settingsStr := rest[bracketIdx+1 : len(rest)-1]
+		settings = parseSettings(settingsStr)
+	} else {
+		colType = strings.TrimSpace(rest)
+	}
+
+	field["ORDINAL_POSITION"] = fmt.Sprintf("%d", ordinal)
+	field["COLUMN_NAME"] = fieldName
+	field["COLUMN_TYPE"] = colType
+	field["COLUMN_DEFAULT"] = nil
+	field["COLUMN_COMMENT"] = ""
+	field["IS_NULLABLE"] = "YES"
+	field["DATA_TYPE"] = extractDataType(colType)
+	field["EXTRA"] = ""
+	field["COLUMN_KEY"] = ""
+	field["_settings"] = settings
+
+	for _, s := range settings {
+		switch {
+		case s == "pk":
+			field["COLUMN_KEY"] = "PRI"
+		case s == "increment":
+			field["EXTRA"] = "auto_increment"
+		case s == "not null":
+			field["IS_NULLABLE"] = "NO"
+		case s == "null":
+			field["IS_NULLABLE"] = "YES"
+		case strings.HasPrefix(s, "default:"):
+			defVal := strings.TrimSpace(s[8:])
+			// Remove backtick quoting
+			if len(defVal) >= 2 && defVal[0] == '`' && defVal[len(defVal)-1] == '`' {
+				defVal = defVal[1 : len(defVal)-1]
+				defVal = strings.ReplaceAll(defVal, "\\`", "`")
+			}
+			field["COLUMN_DEFAULT"] = &defVal
+		case strings.HasPrefix(s, "note:"):
+			comment := strings.TrimSpace(s[5:])
+			// Remove single quotes
+			if len(comment) >= 2 && comment[0] == '\'' && comment[len(comment)-1] == '\'' {
+				comment = comment[1 : len(comment)-1]
+				comment = strings.ReplaceAll(comment, "\\'", "'")
+			}
+			field["COLUMN_COMMENT"] = comment
+		}
+	}
+
+	return field, nil
+}
+
+// parseSettings parses the comma-separated settings inside brackets.
+// Handles values with colons, quoted strings, etc.
+func parseSettings(s string) []string {
+	var result []string
+	var current strings.Builder
+	inBacktick := false
+	inSingleQuote := false
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if ch == '`' && !inSingleQuote {
+			inBacktick = !inBacktick
+			current.WriteByte(ch)
+		} else if ch == '\'' && !inBacktick {
+			inSingleQuote = !inSingleQuote
+			current.WriteByte(ch)
+		} else if ch == ',' && !inBacktick && !inSingleQuote {
+			result = append(result, strings.TrimSpace(current.String()))
+			current.Reset()
+		} else {
+			current.WriteByte(ch)
+		}
+	}
+	if current.Len() > 0 {
+		result = append(result, strings.TrimSpace(current.String()))
+	}
+
+	return result
+}
+
+// parseIndexEntry parses an index entry inside an Indexes block:
+//
+//	(col1, col2) [name: "idx_name", type: btree, unique]
+func parseIndexEntry(line string) (map[string]interface{}, error) {
+	idx := make(map[string]interface{})
+
+	trimmed := strings.TrimSpace(line)
+
+	// Find the parenthesized column list
+	parenStart := strings.Index(trimmed, "(")
+	parenEnd := strings.Index(trimmed, ")")
+	if parenStart == -1 || parenEnd == -1 {
+		return nil, fmt.Errorf("invalid index entry: %s", trimmed)
+	}
+
+	colsStr := trimmed[parenStart+1 : parenEnd]
+	var cols []interface{}
+	for _, col := range strings.Split(colsStr, ",") {
+		col = strings.TrimSpace(col)
+		col = strings.Trim(col, "\"")
+		if col != "" {
+			cols = append(cols, col)
+		}
+	}
+
+	// Parse settings
+	settingsStr := ""
+	bracketStart := strings.Index(trimmed[parenEnd:], "[")
+	if bracketStart >= 0 {
+		bracketEnd := strings.LastIndex(trimmed, "]")
+		if bracketEnd > parenEnd {
+			settingsStr = trimmed[parenEnd+bracketStart+1 : bracketEnd]
+		}
+	}
+
+	settings := parseSettings(settingsStr)
+	indexName := ""
+	indexType := "BTREE"
+	nonUnique := "1"
+
+	for _, s := range settings {
+		s = strings.TrimSpace(s)
+		switch {
+		case strings.HasPrefix(s, "name:"):
+			name := strings.TrimSpace(s[5:])
+			name = strings.Trim(name, "\"")
+			indexName = name
+		case strings.HasPrefix(s, "type:"):
+			t := strings.TrimSpace(s[5:])
+			if strings.ToUpper(t) == "FULLTEXT" {
+				indexType = "FULLTEXT"
+			} else if strings.ToUpper(t) == "HASH" {
+				indexType = "HASH"
+			} else {
+				indexType = "BTREE"
+			}
+		case s == "unique":
+			nonUnique = "0"
+		}
+	}
+
+	if indexName == "" && len(cols) > 0 {
+		indexName = cols[0].(string)
+	}
+
+	idx["Key_name"] = indexName
+	idx["Non_unique"] = nonUnique
+	idx["Index_type"] = indexType
+	idx["fields"] = cols
+	if len(cols) > 0 {
+		idx["Column_name"] = cols[0].(string)
+	}
+	idx["Seq_in_index"] = "1"
+	idx["Collation"] = nil
+	idx["Cardinality"] = nil
+	idx["Sub_part"] = nil
+	idx["Packed"] = nil
+	idx["Null"] = ""
+	idx["Comment"] = ""
+	idx["Index_comment"] = ""
+
+	return idx, nil
+}
+
+// parseRef parses a Ref line:
+//
+//	Ref: "table1"."col1" > "table2"."col2" [delete: cascade, update: no action]
+func parseRef(line string) (refEntry, error) {
+	var ref refEntry
+	ref.deleteRule = "NO ACTION"
+	ref.updateRule = "NO ACTION"
+
+	trimmed := strings.TrimSpace(line)
+	// Remove "Ref:" prefix
+	rest := strings.TrimPrefix(trimmed, "Ref:")
+	rest = strings.TrimSpace(rest)
+
+	// Split on " > "
+	parts := strings.Split(rest, " > ")
+	if len(parts) < 2 {
+		return ref, fmt.Errorf("invalid Ref format, expected '>' separator: %s", line)
+	}
+
+	// Parse left side: "table"."col"
+	left := strings.TrimSpace(parts[0])
+	leftParts := strings.Split(left, ".")
+	if len(leftParts) != 2 {
+		return ref, fmt.Errorf("invalid left side of Ref: %s", left)
+	}
+	ref.fromTable = strings.Trim(leftParts[0], "\"")
+	ref.fromCol = strings.Trim(leftParts[1], "\"")
+
+	// Parse right side: "table"."col" [settings]
+	right := strings.TrimSpace(parts[1])
+
+	rightTable := ""
+	rightCol := ""
+	var refSettings string
+
+	bracketIdx := strings.Index(right, "[")
+	if bracketIdx >= 0 && strings.HasSuffix(strings.TrimSpace(right), "]") {
+		rightWithoutSettings := strings.TrimSpace(right[:bracketIdx])
+		rightParts := strings.Split(rightWithoutSettings, ".")
+		if len(rightParts) != 2 {
+			return ref, fmt.Errorf("invalid right side of Ref: %s", rightWithoutSettings)
+		}
+		rightTable = strings.Trim(rightParts[0], "\"")
+		rightCol = strings.Trim(rightParts[1], "\"")
+		refSettings = right[bracketIdx+1 : len(right)-1]
+	} else {
+		rightParts := strings.Split(right, ".")
+		if len(rightParts) != 2 {
+			return ref, fmt.Errorf("invalid right side of Ref: %s", right)
+		}
+		rightTable = strings.Trim(rightParts[0], "\"")
+		rightCol = strings.Trim(rightParts[1], "\"")
+	}
+
+	ref.toTable = rightTable
+	ref.toCol = rightCol
+
+	// Parse reference settings
+	if refSettings != "" {
+		settings := parseSettings(refSettings)
+		for _, s := range settings {
+			s = strings.TrimSpace(s)
+			if strings.HasPrefix(s, "delete:") {
+				ref.deleteRule = strings.TrimSpace(s[7:])
+			} else if strings.HasPrefix(s, "update:") {
+				ref.updateRule = strings.TrimSpace(s[7:])
+			}
+		}
+	}
+
+	return ref, nil
+}
+
+// parseTableNote parses the Note content of a table and extracts
+// Engine, Collation, and Comment metadata.
+func parseTableNote(tableData map[string]interface{}, noteText string) {
+	parts := strings.Split(noteText, "|")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, "Engine:") {
+			tableData["Engine"] = strings.TrimSpace(part[7:])
+		} else if strings.HasPrefix(part, "Collation:") {
+			tableData["Collation"] = strings.TrimSpace(part[10:])
+		} else if strings.HasPrefix(part, "Comment:") {
+			tableData["Comment"] = strings.TrimSpace(part[8:])
+		}
+	}
+}
+
+// extractDataType extracts the base data type from a column type like "varchar(255)" or "int(11)".
+func extractDataType(colType string) string {
+	paren := strings.Index(colType, "(")
+	if paren >= 0 {
+		return strings.ToLower(colType[:paren])
+	}
+	// Handle types with spaces like "unsigned int"
+	space := strings.Index(colType, " ")
+	if space >= 0 {
+		return strings.ToLower(colType[:space])
+	}
+	return strings.ToLower(colType)
 }

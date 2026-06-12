@@ -14,8 +14,9 @@ import (
 var snashCmd = &cobra.Command{
 	Use:   "snash",
 	Short: "Create DB model snapshot",
-	Long: `Creates DB model snapshot and stores it as JSON file. 
-You can use this file to conform to this model another DB with restore command`,
+	Long: `Creates DB model snapshot and stores it as a DBML file (Database Markup Language).
+You can use this file to conform another DB to this model with the restore command.
+DBML files can be visualized at https://dbdiagram.io/home`,
 	Run: func(cmd *cobra.Command, args []string) {
 		options := msc.Config{
 			User:      viper.GetString("user"),

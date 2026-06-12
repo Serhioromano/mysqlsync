@@ -17,8 +17,9 @@ var cnfLoaded bool
 var rootCmd = &cobra.Command{
 	Use:   "mysqlsync",
 	Short: "Synchronize MySQL DB Model from one DB to another",
-	Long: `Tool to migrate DB from development to productoion without a pain.	
-It works though generating DB model snapshot JSON files.`,
+	Long: `Tool to migrate DB from development to production without a pain.	
+It works though generating DB model snapshot DBML files (Database Markup Language).
+DBML files can be visualized at https://dbdiagram.io/home`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -112,6 +113,6 @@ func initConfig() {
 	}
 	f := viper.GetString("file")
 	if f == "" {
-		viper.Set("file", viper.GetString("db")+".json")
+		viper.Set("file", viper.GetString("db")+".dbml")
 	}
 }

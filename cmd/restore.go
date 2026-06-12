@@ -14,7 +14,7 @@ import (
 var restoreCmd = &cobra.Command{
 	Use:   "restore",
 	Short: "Restore DB model from shapshot",
-	Long:  `It takes .json file with DB model snapshot created by shash command and run conform DB to that snapshot`,
+	Long:  `It takes a .dbml file with DB model snapshot created by the snash command and conforms the target DB to that snapshot.`,
 	Run: func(cmd *cobra.Command, args []string) {
 
 		profile := viper.GetString("profile")
