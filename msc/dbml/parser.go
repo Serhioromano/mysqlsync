@@ -8,13 +8,14 @@ import (
 )
 
 // Parse parses a DBML document string and returns a Schema.
+// Handles both our canonical format and dbdiagram.io's full DBML dialect.
 func Parse(input string) (*s.Schema, error) {
 	schema := &s.Schema{}
 
 	lines := strings.Split(input, "\n")
 
-	// Collect Ref lines for later attachment
 	type refEntry struct {
+		refName    string
 		fromTable  string
 		fromCol    string
 		toTable    string
@@ -27,6 +28,11 @@ func Parse(input string) (*s.Schema, error) {
 	i := 0
 	for i < len(lines) {
 		line := strings.TrimSpace(lines[i])
+
+		// Strip inline // comments
+		if idx := findUnquoted(line, "//"); idx >= 0 {
+			line = strings.TrimSpace(line[:idx])
+		}
 
 		// Header comments
 		if strings.HasPrefix(line, "//") {
@@ -56,14 +62,40 @@ func Parse(input string) (*s.Schema, error) {
 			continue
 		}
 
-		// Ref line
-		if strings.HasPrefix(line, "Ref:") {
+		// Ref line — two formats:
+		//   Ref: "table"."col" > "table"."col" [settings]
+		//   Ref name: table.col > table.col  (dbdiagram.io)
+		if strings.HasPrefix(line, "Ref:") || strings.HasPrefix(line, "Ref ") {
 			ref, err := parseRefLine(line)
 			if err != nil {
 				return nil, fmt.Errorf("error parsing Ref at line %d: %v", i+1, err)
 			}
 			refs = append(refs, ref)
 			i++
+			continue
+		}
+
+		// Records block — skip entirely
+		if strings.HasPrefix(line, "Records ") {
+			i = skipBlock(lines, i)
+			continue
+		}
+
+		// Enum block — skip
+		if strings.HasPrefix(line, "Enum ") {
+			i = skipBlock(lines, i)
+			continue
+		}
+
+		// TableGroup / Project / Note at top level — skip
+		if strings.HasPrefix(line, "TableGroup ") ||
+			strings.HasPrefix(line, "Project ") ||
+			strings.HasPrefix(line, "Note:") {
+			if strings.Contains(line, "{") {
+				i = skipBlock(lines, i)
+			} else {
+				i++
+			}
 			continue
 		}
 
@@ -74,7 +106,10 @@ func Parse(input string) (*s.Schema, error) {
 	for _, ref := range refs {
 		for idx := range schema.Tables {
 			if schema.Tables[idx].Name == ref.fromTable {
-				constraintName := fmt.Sprintf("fk_%s_%s", ref.fromTable, ref.fromCol)
+				constraintName := ref.refName
+		if constraintName == "" {
+			constraintName = fmt.Sprintf("fk_%s_%s", ref.fromTable, ref.fromCol)
+		}
 				schema.Tables[idx].Constraints = append(schema.Tables[idx].Constraints, s.ConstraintDef{
 					Name:              constraintName,
 					ColumnName:        ref.fromCol,
@@ -90,6 +125,30 @@ func Parse(input string) (*s.Schema, error) {
 	return schema, nil
 }
 
+// skipBlock skips a brace-delimited block starting at start.
+// Returns the line index after the closing brace.
+func skipBlock(lines []string, start int) int {
+	if strings.Contains(lines[start], "{") && strings.Contains(lines[start], "}") {
+		return start + 1
+	}
+	depth := 0
+	i := start
+	for i < len(lines) {
+		for _, ch := range lines[i] {
+			if ch == '{' {
+				depth++
+			} else if ch == '}' {
+				depth--
+			}
+		}
+		i++
+		if depth == 0 {
+			break
+		}
+	}
+	return i
+}
+
 func parseTable(lines []string, start int) (s.TableDef, int, error) {
 	table := s.TableDef{
 		Engine:    "InnoDB",
@@ -99,16 +158,13 @@ func parseTable(lines []string, start int) (s.TableDef, int, error) {
 	headerLine := strings.TrimSpace(lines[start])
 	rest := strings.TrimPrefix(headerLine, "Table ")
 	rest = strings.TrimSpace(rest)
+	// Remove trailing {
+	rest = strings.TrimSuffix(rest, " {")
+	rest = strings.TrimSuffix(rest, "{")
+	rest = strings.TrimSpace(rest)
 
-	qStart := strings.Index(rest, "\"")
-	if qStart == -1 {
-		return table, start, fmt.Errorf("expected quoted table name at line %d: %s", start+1, headerLine)
-	}
-	qEnd := strings.Index(rest[qStart+1:], "\"")
-	if qEnd == -1 {
-		return table, start, fmt.Errorf("unterminated table name at line %d: %s", start+1, headerLine)
-	}
-	table.Name = rest[qStart+1 : qStart+1+qEnd]
+	// Table name: either "name" or bare name
+	table.Name = strings.Trim(rest, "\"")
 
 	i := start + 1
 	inIndexes := false
@@ -118,6 +174,11 @@ func parseTable(lines []string, start int) (s.TableDef, int, error) {
 	for i < len(lines) {
 		line := lines[i]
 		trimmed := strings.TrimSpace(line)
+
+		// Strip inline // comments
+		if idx := findUnquoted(trimmed, "//"); idx >= 0 {
+			trimmed = strings.TrimSpace(trimmed[:idx])
+		}
 
 		// Handle Note block (multi-line)
 		if inNote {
@@ -181,33 +242,33 @@ func parseTable(lines []string, start int) (s.TableDef, int, error) {
 			continue
 		}
 
-		// Column definition
-		if strings.HasPrefix(trimmed, "\"") {
-			fd, err := parseColumnDef(trimmed)
-			if err == nil {
-				if fd.IsPrimary {
-					table.PrimaryKey = fd.Name
-					// Add PK index
-					table.Indexes = append(table.Indexes, s.IndexDef{
-						Name:      "PRIMARY",
-						Columns:   []string{fd.Name},
-						IsUnique:  true,
-						IndexType: "BTREE",
-					})
-				}
-				if fd.IsUnique {
-					// Already captured inline as unique index; add if not PK
-					if !fd.IsPrimary {
-						table.Indexes = append(table.Indexes, s.IndexDef{
-							Name:      fd.Name,
-							Columns:   []string{fd.Name},
-							IsUnique:  true,
-							IndexType: "BTREE",
-						})
-					}
-				}
-				table.Fields = append(table.Fields, fd)
+		// Skip empty lines
+		if trimmed == "" {
+			i++
+			continue
+		}
+
+		// Column definition — either "name" type [...] or name type [...]
+		fd, err := parseColumnDef(trimmed)
+		if err == nil {
+			if fd.IsPrimary {
+				table.PrimaryKey = fd.Name
+				table.Indexes = append(table.Indexes, s.IndexDef{
+					Name:      "PRIMARY",
+					Columns:   []string{fd.Name},
+					IsUnique:  true,
+					IndexType: "BTREE",
+				})
 			}
+			if fd.IsUnique && !fd.IsPrimary {
+				table.Indexes = append(table.Indexes, s.IndexDef{
+					Name:      fd.Name,
+					Columns:   []string{fd.Name},
+					IsUnique:  true,
+					IndexType: "BTREE",
+				})
+			}
+			table.Fields = append(table.Fields, fd)
 			i++
 			continue
 		}
@@ -220,23 +281,33 @@ func parseTable(lines []string, start int) (s.TableDef, int, error) {
 
 func parseColumnDef(line string) (s.FieldDef, error) {
 	fd := s.FieldDef{IsNullable: true}
-
 	trimmed := strings.TrimSpace(line)
 
-	qStart := strings.Index(trimmed, "\"")
-	if qStart == -1 {
-		return fd, fmt.Errorf("expected quoted field name in: %s", trimmed)
-	}
-	qEnd := strings.Index(trimmed[qStart+1:], "\"")
-	if qEnd == -1 {
-		return fd, fmt.Errorf("unterminated field name in: %s", trimmed)
-	}
-	fd.Name = trimmed[qStart+1 : qStart+1+qEnd]
+	// Extract name and rest. Name is either quoted or bare.
+	name := ""
+	rest := ""
 
-	rest := trimmed[qStart+1+qEnd+1:]
+	if strings.HasPrefix(trimmed, "\"") {
+		qEnd := strings.Index(trimmed[1:], "\"")
+		if qEnd == -1 {
+			return fd, fmt.Errorf("unterminated field name in: %s", trimmed)
+		}
+		name = trimmed[1 : 1+qEnd]
+		rest = trimmed[1+qEnd+1:]
+	} else {
+		// Bare name: first whitespace-delimited token
+		space := strings.Index(trimmed, " ")
+		if space == -1 {
+			return fd, fmt.Errorf("expected column definition: %s", trimmed)
+		}
+		name = trimmed[:space]
+		rest = trimmed[space:]
+	}
+	fd.Name = name
 	rest = strings.TrimSpace(rest)
 
-	var colType string
+	// Extract column type and settings
+	colType := ""
 	var settings []string
 
 	bracketIdx := strings.Index(rest, "[")
@@ -250,27 +321,29 @@ func parseColumnDef(line string) (s.FieldDef, error) {
 	fd.ColumnType = colType
 	fd.DataType = extractDataType(colType)
 
-	for _, s := range settings {
+	for _, setting := range settings {
 		switch {
-		case s == "pk":
+		case setting == "pk" || setting == "primary key":
 			fd.IsPrimary = true
-		case s == "increment":
+		case setting == "increment" || setting == "auto increment":
 			fd.IsAutoIncr = true
-		case s == "not null":
+		case setting == "not null":
 			fd.IsNullable = false
-		case s == "null":
+		case setting == "null":
 			fd.IsNullable = true
-		case s == "unique":
+		case setting == "unique":
 			fd.IsUnique = true
-		case strings.HasPrefix(s, "default:"):
-			defVal := strings.TrimSpace(s[8:])
-			if len(defVal) >= 2 && defVal[0] == '`' && defVal[len(defVal)-1] == '`' {
+		case strings.HasPrefix(setting, "default:"):
+			defVal := strings.TrimSpace(setting[8:])
+			if len(defVal) >= 2 && (defVal[0] == '`' || defVal[0] == '\'') &&
+				defVal[len(defVal)-1] == defVal[0] {
 				defVal = defVal[1 : len(defVal)-1]
-				defVal = strings.ReplaceAll(defVal, "\\`", "`")
 			}
-			fd.DefaultValue = &defVal
-		case strings.HasPrefix(s, "note:"):
-			comment := strings.TrimSpace(s[5:])
+			if defVal != "" {
+				fd.DefaultValue = &defVal
+			}
+		case strings.HasPrefix(setting, "note:"):
+			comment := strings.TrimSpace(setting[5:])
 			if len(comment) >= 2 && comment[0] == '\'' && comment[len(comment)-1] == '\'' {
 				comment = comment[1 : len(comment)-1]
 				comment = strings.ReplaceAll(comment, "\\'", "'")
@@ -284,7 +357,6 @@ func parseColumnDef(line string) (s.FieldDef, error) {
 
 func parseIndexEntry(line string) (s.IndexDef, error) {
 	idx := s.IndexDef{IndexType: "BTREE"}
-
 	trimmed := strings.TrimSpace(line)
 
 	parenStart := strings.Index(trimmed, "(")
@@ -311,17 +383,17 @@ func parseIndexEntry(line string) (s.IndexDef, error) {
 		}
 	}
 
-	for _, s := range parseSettings(settingsStr) {
-		s = strings.TrimSpace(s)
+	for _, setting := range parseSettings(settingsStr) {
+		setting = strings.TrimSpace(setting)
 		switch {
-		case strings.HasPrefix(s, "name:"):
-			idx.Name = strings.Trim(strings.TrimSpace(s[5:]), "\"")
-		case strings.HasPrefix(s, "type:"):
-			t := strings.ToUpper(strings.TrimSpace(s[5:]))
+		case strings.HasPrefix(setting, "name:"):
+			idx.Name = strings.Trim(strings.TrimSpace(setting[5:]), "\"")
+		case strings.HasPrefix(setting, "type:"):
+			t := strings.ToUpper(strings.TrimSpace(setting[5:]))
 			if t == "FULLTEXT" || t == "HASH" {
 				idx.IndexType = t
 			}
-		case s == "unique":
+		case setting == "unique":
 			idx.IsUnique = true
 		}
 	}
@@ -334,6 +406,7 @@ func parseIndexEntry(line string) (s.IndexDef, error) {
 }
 
 func parseRefLine(line string) (struct {
+	refName    string
 	fromTable  string
 	fromCol    string
 	toTable    string
@@ -342,6 +415,7 @@ func parseRefLine(line string) (struct {
 	updateRule string
 }, error) {
 	var ref struct {
+		refName    string
 		fromTable  string
 		fromCol    string
 		toTable    string
@@ -352,55 +426,76 @@ func parseRefLine(line string) (struct {
 	ref.deleteRule = "NO ACTION"
 	ref.updateRule = "NO ACTION"
 
-	trimmed := strings.TrimSpace(strings.TrimPrefix(line, "Ref:"))
-	parts := strings.Split(trimmed, " > ")
-	if len(parts) < 2 {
-		return ref, fmt.Errorf("invalid Ref format: %s", line)
+	trimmed := strings.TrimSpace(line)
+
+	// Remove "Ref:" or "Ref name:" prefix
+	withoutPrefix := trimmed
+	if strings.HasPrefix(trimmed, "Ref ") {
+		// Format: "Ref name: table.col > table.col"
+		colonIdx := strings.Index(trimmed, ":")
+		if colonIdx >= 0 {
+			ref.refName = strings.TrimSpace(trimmed[4:colonIdx])
+			withoutPrefix = strings.TrimSpace(trimmed[colonIdx+1:])
+		} else {
+			withoutPrefix = strings.TrimSpace(trimmed[4:])
+		}
+	} else {
+		// Format: "Ref: table.col > table.col"
+		withoutPrefix = strings.TrimSpace(strings.TrimPrefix(trimmed, "Ref:"))
 	}
 
-	// Left side
-	left := strings.Split(strings.TrimSpace(parts[0]), ".")
-	if len(left) != 2 {
-		return ref, fmt.Errorf("invalid left side of Ref: %s", parts[0])
+	// Determine direction: ">" or "<"
+	var left, right string
+	if strings.Contains(withoutPrefix, " > ") {
+		parts := strings.SplitN(withoutPrefix, " > ", 2)
+		left = parts[0]
+		right = parts[1]
+	} else if strings.Contains(withoutPrefix, " < ") {
+		// Reverse: right side is the source (from), left is target (to)
+		parts := strings.SplitN(withoutPrefix, " < ", 2)
+		right = parts[0]
+		left = parts[1]
+	} else {
+		return ref, fmt.Errorf("invalid Ref format (missing > or <): %s", line)
 	}
-	ref.fromTable = strings.Trim(left[0], "\"")
-	ref.fromCol = strings.Trim(left[1], "\"")
 
-	// Right side with optional settings
-	right := strings.TrimSpace(parts[1])
-	rightTable, rightCol := "", ""
-	var refSettings string
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
 
+	// Parse left side: table.col or "table"."col"
+	ref.fromTable, ref.fromCol = parseRefSide(left)
+
+	// Parse right side with optional settings
+	refSettings := ""
 	bracketIdx := strings.Index(right, "[")
 	if bracketIdx >= 0 && strings.HasSuffix(strings.TrimSpace(right), "]") {
-		rightParts := strings.Split(strings.TrimSpace(right[:bracketIdx]), ".")
-		if len(rightParts) != 2 {
-			return ref, fmt.Errorf("invalid right side of Ref: %s", right[:bracketIdx])
-		}
-		rightTable = strings.Trim(rightParts[0], "\"")
-		rightCol = strings.Trim(rightParts[1], "\"")
+		ref.toTable, ref.toCol = parseRefSide(strings.TrimSpace(right[:bracketIdx]))
 		refSettings = right[bracketIdx+1 : len(right)-1]
 	} else {
-		rightParts := strings.Split(right, ".")
-		if len(rightParts) != 2 {
-			return ref, fmt.Errorf("invalid right side of Ref: %s", right)
-		}
-		rightTable = strings.Trim(rightParts[0], "\"")
-		rightCol = strings.Trim(rightParts[1], "\"")
+		ref.toTable, ref.toCol = parseRefSide(right)
 	}
-	ref.toTable = rightTable
-	ref.toCol = rightCol
 
-	for _, s := range parseSettings(refSettings) {
-		s = strings.TrimSpace(s)
-		if strings.HasPrefix(s, "delete:") {
-			ref.deleteRule = strings.TrimSpace(s[7:])
-		} else if strings.HasPrefix(s, "update:") {
-			ref.updateRule = strings.TrimSpace(s[7:])
+	for _, setting := range parseSettings(refSettings) {
+		setting = strings.TrimSpace(setting)
+		if strings.HasPrefix(setting, "delete:") {
+			ref.deleteRule = strings.TrimSpace(setting[7:])
+		} else if strings.HasPrefix(setting, "update:") {
+			ref.updateRule = strings.TrimSpace(setting[7:])
 		}
 	}
 
 	return ref, nil
+}
+
+// parseRefSide parses "table.col" or "\"table\".\"col\"".
+func parseRefSide(side string) (table, col string) {
+	side = strings.TrimSpace(side)
+	parts := strings.Split(side, ".")
+	if len(parts) >= 2 {
+		table = strings.Trim(parts[0], "\"")
+		col = strings.Trim(parts[1], "\"")
+	}
+	return
 }
 
 func parseTableNote(table *s.TableDef, noteText string) {
@@ -455,4 +550,25 @@ func extractDataType(colType string) string {
 		return strings.ToLower(strings.TrimSpace(colType[:space]))
 	}
 	return strings.ToLower(strings.TrimSpace(colType))
+}
+
+// findUnquoted finds the position of needle in s, ignoring occurrences inside
+// double-quoted or single-quoted strings.
+func findUnquoted(s string, needle string) int {
+	inDQ := false
+	inSQ := false
+	for i := 0; i <= len(s)-len(needle); i++ {
+		if s[i] == '"' && !inSQ {
+			inDQ = !inDQ
+			continue
+		}
+		if s[i] == '\'' && !inDQ {
+			inSQ = !inSQ
+			continue
+		}
+		if !inDQ && !inSQ && s[i:i+len(needle)] == needle {
+			return i
+		}
+	}
+	return -1
 }

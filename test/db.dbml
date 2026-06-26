@@ -31,9 +31,9 @@ Table comments {
 
 Ref user_posts: posts.user_id > users.id // many-to-one
 
-Ref user_comments: comments.user_id > users.id // many-to-one
+Ref user_comments: comments.user_id > users.id  [delete: cascade, update: cascade]
 
-Ref post_comments: comments.user_id > posts.id // many-to-one
+Ref post_comments: comments.user_id > posts.id  [delete: cascade, update: cascade]
 
 Ref: users.id < follows.following_user_id
 
